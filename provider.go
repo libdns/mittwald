@@ -112,11 +112,20 @@ func (p *Provider) projectOf(ctx context.Context, name string) (string, error) {
 	if id, ok := lookup(); ok {
 		return id, nil
 	}
+	// The domain list names the project of every domain in one request.
+	domains, err := listDomainProjects(ctx, p.client)
+	if err != nil {
+		return "", err
+	}
+	p.projectByZone = domains
+	if id, ok := lookup(); ok {
+		return id, nil
+	}
+	// A domain missing from that list is looked for in the zones of every project.
 	ids, err := listProjectIDs(ctx, p.client)
 	if err != nil {
 		return "", err
 	}
-	p.projectByZone = map[string]string{}
 	for _, id := range ids {
 		zones, err := listProjectZones(ctx, p.client, id)
 		if err != nil {

@@ -27,6 +27,8 @@ type fakeAPI struct {
 	url    string // where the fake listens, for Provider.apiURL
 
 	caaPoisoned []string // names whose zone was deleted with a CAA set
+
+	domainListCalls, projectListCalls int
 }
 
 func unsetSets() map[string]any {
@@ -67,7 +69,11 @@ func (f *fakeAPI) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	switch {
+	case r.Method == http.MethodGet && path == "/domains":
+		f.domainListCalls++
+		write(200, []map[string]any{{"domain": "example.com", "domainId": "d1", "projectId": "p1"}})
 	case r.Method == http.MethodGet && path == "/projects":
+		f.projectListCalls++
 		write(200, []map[string]any{{"id": "p1"}})
 	case r.Method == http.MethodGet && path == "/projects/p1/dns-zones":
 		var list []map[string]any
@@ -520,6 +526,26 @@ func TestWaitingForAnotherCallEndsWithTheContext(t *testing.T) {
 	defer cancel()
 	if _, err := p.GetRecords(ctx, "example.com."); !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("want the deadline, got %v", err)
+	}
+}
+
+func TestProjectLookupUsesTheDomainListFirst(t *testing.T) {
+	f := newFakeAPI(t)
+	p := &Provider{APIToken: "t", apiURL: f.url}
+	ctx := context.Background()
+	// example.com is in the domain list, so the projects are not listed.
+	if _, err := p.GetRecords(ctx, "example.com."); err != nil {
+		t.Fatal(err)
+	}
+	if f.domainListCalls != 1 || f.projectListCalls != 0 {
+		t.Errorf("domain list %d, project list %d calls", f.domainListCalls, f.projectListCalls)
+	}
+	// other.example is only a zone in a project: found through the projects.
+	if _, err := p.GetRecords(ctx, "other.example."); err != nil {
+		t.Fatal(err)
+	}
+	if f.projectListCalls != 1 {
+		t.Errorf("want the projects listed once, got %d", f.projectListCalls)
 	}
 }
 

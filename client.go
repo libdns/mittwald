@@ -56,6 +56,25 @@ func listProjectZones(ctx context.Context, c generatedv2.Client, projectID strin
 	return *zones, nil
 }
 
+// listDomainProjects returns the project ID of every domain in the token's
+// domain list, by the domain's name in ASCII.
+func listDomainProjects(ctx context.Context, c generatedv2.Client) (map[string]string, error) {
+	domains, resp, err := c.Domain().ListDomains(ctx, domainclientv2.ListDomainsRequest{})
+	closeBody(resp)
+	if err != nil {
+		return nil, fmt.Errorf("listing domains: %w", err)
+	}
+	projects := map[string]string{}
+	for _, d := range *domains {
+		name, err := idna.ToASCII(d.Domain)
+		if err != nil || d.ProjectId == "" {
+			continue
+		}
+		projects[name] = d.ProjectId
+	}
+	return projects, nil
+}
+
 // listProjectIDs returns the IDs of all projects the token can access.
 func listProjectIDs(ctx context.Context, c generatedv2.Client) ([]string, error) {
 	var ids []string
