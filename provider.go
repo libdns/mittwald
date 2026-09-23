@@ -1,22 +1,25 @@
 // Package mittwald implements a DNS record management client compatible with
 // the libdns interfaces for mittwald mStudio (https://www.mittwald.de).
 //
-// mStudio keeps one "DNS zone" per name: a domain and every name below it
-// (www, _acme-challenge, _dmarc) are separate zones, each with one record set
-// per type (A and AAAA together, CNAME, MX, TXT, SRV and CAA). This package
-// creates the zone of a name when a record is added to it and deletes it when
-// its last record is removed, except for the domain's own zone, a zone with a
-// set that mStudio manages and a zone with other zones below it. A record in
-// a new zone takes longer until the nameservers serve it than a change in an
-// existing one (73 against 21 to 31 seconds, measured once in production).
+// The mStudio API keeps the records of each name in an object of its own,
+// which it calls a zone: a domain and every name below it (www,
+// _acme-challenge, _dmarc) each have one, with one record set per type (A and
+// AAAA together, CNAME, MX, TXT, SRV and CAA). These are not DNS zones: DNS
+// has one zone per domain with one SOA, and a name below it cannot be
+// delegated. A CNAME is therefore possible below the apex only; the API
+// rejects one at the apex. This package creates the object of a name when a
+// record is added to it and deletes it when its last record is removed,
+// except for the domain's own, one with a set that mStudio manages and one
+// with objects of names below it. A record for a name without an object takes
+// longer until the nameservers serve it than a change for a name that has one
+// (73 against 21 to 31 seconds, measured once in production).
 //
 // A set has one TTL. Records written with a TTL give it to the whole set, the
 // AAAA records included when A records are written and the other way round,
 // as with libdns/hetzner; AppendRecords that adds a record therefore changes
 // the TTL of the existing records of its set, which the libdns contract does
-// not foresee. A TTL of 0
-// keeps the set's TTL; TTLs are brought into 60 seconds to one day.
-// DeleteRecords does not compare TTLs.
+// not foresee. A TTL of 0 keeps the set's TTL; TTLs are brought into 60
+// seconds to one day. DeleteRecords does not compare TTLs.
 //
 // Record sets that mStudio manages (the addresses of a name connected to an
 // ingress, the mail exchangers of mittwald's mail service) are not returned
